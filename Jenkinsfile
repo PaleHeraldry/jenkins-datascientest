@@ -11,15 +11,7 @@ pipeline {
         HELM_CHART_PATH = './charts'
     }
     
-    stages {
-        stage('Checkout') {
-            steps {
-                git branch: "${env.BRANCH_NAME}", 
-                    credentialsId: "${GIT_CREDENTIALS_ID}",
-                    url: 'https://github.com/PaleHeraldry/Jenkins_devops_exams.git'
-            }
-        }
-        
+    stages {        
         stage('Build Docker Images') {
             steps {
                 script {
