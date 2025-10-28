@@ -8,7 +8,7 @@ pipeline {
         // Paramètres du Registre Docker
         DOCKER_REGISTRY = 'docker.io'
         DOCKER_USER = 'rpadallery'              // Votre nom d'utilisateur Docker Hub
-        DOCKER_CREDENTIALS_ID = 'rpadallery'    // ID de vos credentials Docker Hub stockés dans Jenkins
+        DOCKER_CREDENTIALS_ID = 'DOCKER_HUB_PASS' // This is the ID of the Secret Text credential
         
         // Identifiants Git (pour SCM, si nécessaire)
         GIT_CREDENTIALS_ID = 'PaleHeraldry'
@@ -63,26 +63,36 @@ pipeline {
         // ------------------------------------------------------------------------------------------------------------------
 
         stage('Tag and Push Docker Images') {
-            steps {
-                script {
-                    // Se connecter au registre Docker Hub en utilisant les credentials
-                    docker.withRegistry("https://${DOCKER_REGISTRY}", "${DOCKER_CREDENTIALS_ID}") {
-                        // Pousser les images avec le tag unique (pour l'historique)
-                        docker.image("${MOVIE_IMAGE_BASE}:${IMAGE_TAG}").push()
-                        docker.image("${CAST_IMAGE_BASE}:${IMAGE_TAG}").push()
-
-                        // Retagguer l'image unique avec 'latest' et pousser (pour la commodité du déploiement)
-                        docker.image("${MOVIE_IMAGE_BASE}:${IMAGE_TAG}").tag("${MOVIE_IMAGE_BASE}:latest")
-                        docker.image("${CAST_IMAGE_BASE}:${IMAGE_TAG}").tag("${CAST_IMAGE_BASE}:latest")
-                        
-                        docker.image("${MOVIE_IMAGE_BASE}:latest").push()
-                        docker.image("${CAST_IMAGE_BASE}:latest").push()
-                        
-                        echo "Docker images pushed successfully with tags: ${IMAGE_TAG} and latest."
+                    steps {
+                        script {
+                            // Use withCredentials to inject the DOCKER_HUB_PASS secret as an environment variable (DOCKER_PASSWORD)
+                            withCredentials([string(credentialsId: env.DOCKER_CREDENTIALS_ID, variable: 'DOCKER_PASSWORD')]) {
+                                
+                                // 1. Perform Docker Login using the injected secret
+                                sh "echo \$DOCKER_PASSWORD | docker login -u ${env.DOCKER_USER} --password-stdin ${env.DOCKER_REGISTRY}"
+        
+                                // We must tag the images before pushing since we didn't capture the Groovy image object
+                                // Tagging from the local image name to the remote target name
+                                sh "docker tag ${env.MOVIE_IMAGE_BASE}:${env.IMAGE_TAG} ${env.MOVIE_IMAGE_BASE}:${env.IMAGE_TAG}"
+                                sh "docker tag ${env.CAST_IMAGE_BASE}:${env.IMAGE_TAG} ${env.CAST_IMAGE_BASE}:${env.IMAGE_TAG}"
+        
+                                // 2. Push unique tags
+                                sh "docker push ${env.MOVIE_IMAGE_BASE}:${env.IMAGE_TAG}"
+                                sh "docker push ${env.CAST_IMAGE_BASE}:${env.IMAGE_TAG}"
+        
+                                // 3. Tag and Push 'latest'
+                                sh "docker tag ${env.MOVIE_IMAGE_BASE}:${env.IMAGE_TAG} ${env.MOVIE_IMAGE_BASE}:latest"
+                                sh "docker tag ${env.CAST_IMAGE_BASE}:${env.IMAGE_TAG} ${env.CAST_IMAGE_BASE}:latest"
+                                
+                                sh "docker push ${env.MOVIE_IMAGE_BASE}:latest"
+                                sh "docker push ${env.CAST_IMAGE_BASE}:latest"
+        
+                                // 4. Log out (optional, good practice)
+                                sh "docker logout ${env.DOCKER_REGISTRY}"
+                            }
+                        }
                     }
                 }
-            }
-        }
 
         // ------------------------------------------------------------------------------------------------------------------
 
