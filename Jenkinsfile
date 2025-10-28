@@ -75,19 +75,19 @@ pipeline {
                 expression { env.BRANCH_NAME == 'dev' }
             }
             steps {
-                sh """
-                echo "Deploying to DEV environment..."
-                echo "${config}" > /tmp/kubeconfig_dev
-                export KUBECONFIG=/tmp/kubeconfig_dev
-                helm upgrade --install fastapiapp-dev ${HELM_CHART_PATH} \\
-                    --namespace dev \\
-                    --create-namespace \\
-                    --set movie.image.repository=${MOVIE_IMAGE_BASE} \\
-                    --set cast.image.repository=${CAST_IMAGE_BASE} \\
-                    --set image.tag=${IMAGE_TAG} \\
-                    --set replicaCount=1
-                rm /tmp/kubeconfig_dev
-                """
+                withCredentials([file(credentialsId: 'config', variable: 'KUBECONFIG_FILE')]) {
+                    sh """
+                    echo "Deploying to DEV environment..."
+                    export KUBECONFIG=\${KUBECONFIG_FILE}
+                    helm upgrade --install fastapiapp-dev ${HELM_CHART_PATH} \\
+                        --namespace dev \\
+                        --create-namespace \\
+                        --set movie.image.repository=${MOVIE_IMAGE_BASE} \\
+                        --set cast.image.repository=${CAST_IMAGE_BASE} \\
+                        --set image.tag=${IMAGE_TAG} \\
+                        --set replicaCount=1
+                    """
+                }
             }
         }
 
@@ -96,19 +96,19 @@ pipeline {
                 expression { env.BRANCH_NAME == 'qa' }
             }
             steps {
-                sh """
-                echo "Deploying to QA environment..."
-                echo "${config}" > /tmp/kubeconfig_qa
-                export KUBECONFIG=/tmp/kubeconfig_qa
-                helm upgrade --install fastapiapp-qa ${HELM_CHART_PATH} \\
-                    --namespace qa \\
-                    --create-namespace \\
-                    --set movie.image.repository=${MOVIE_IMAGE_BASE} \\
-                    --set cast.image.repository=${CAST_IMAGE_BASE} \\
-                    --set image.tag=${IMAGE_TAG} \\
-                    --set replicaCount=2
-                rm /tmp/kubeconfig_qa
-                """
+                withCredentials([file(credentialsId: 'config', variable: 'KUBECONFIG_FILE')]) {
+                    sh """
+                    echo "Deploying to QA environment..."
+                    export KUBECONFIG=\${KUBECONFIG_FILE}
+                    helm upgrade --install fastapiapp-qa ${HELM_CHART_PATH} \\
+                        --namespace qa \\
+                        --create-namespace \\
+                        --set movie.image.repository=${MOVIE_IMAGE_BASE} \\
+                        --set cast.image.repository=${CAST_IMAGE_BASE} \\
+                        --set image.tag=${IMAGE_TAG} \\
+                        --set replicaCount=2
+                    """
+                }
             }
         }
 
@@ -118,19 +118,19 @@ pipeline {
             }
             steps {
                 input(message: 'QA successful. Proceed to STAGING?', ok: 'Deploy')
-                sh """
-                echo "Deploying to STAGING environment..."
-                echo "${config}" > /tmp/kubeconfig_staging
-                export KUBECONFIG=/tmp/kubeconfig_staging
-                helm upgrade --install fastapiapp-staging ${HELM_CHART_PATH} \\
-                    --namespace staging \\
-                    --create-namespace \\
-                    --set movie.image.repository=${MOVIE_IMAGE_BASE} \\
-                    --set cast.image.repository=${CAST_IMAGE_BASE} \\
-                    --set image.tag=${IMAGE_TAG} \\
-                    --set replicaCount=2
-                rm /tmp/kubeconfig_staging
-                """
+                withCredentials([file(credentialsId: 'config', variable: 'KUBECONFIG_FILE')]) {
+                    sh """
+                    echo "Deploying to STAGING environment..."
+                    export KUBECONFIG=\${KUBECONFIG_FILE}
+                    helm upgrade --install fastapiapp-staging ${HELM_CHART_PATH} \\
+                        --namespace staging \\
+                        --create-namespace \\
+                        --set movie.image.repository=${MOVIE_IMAGE_BASE} \\
+                        --set cast.image.repository=${CAST_IMAGE_BASE} \\
+                        --set image.tag=${IMAGE_TAG} \\
+                        --set replicaCount=2
+                    """
+                }
             }
         }
 
@@ -140,22 +140,21 @@ pipeline {
             }
             steps {
                 input(message: 'STAGING successful. Deploy to PRODUCTION?', ok: 'Deploy')
-                sh """
-                echo "Deploying to PRODUCTION environment..."
-                echo "${config}" > /tmp/kubeconfig_prod
-                export KUBECONFIG=/tmp/kubeconfig_prod
-                helm upgrade --install fastapiapp-prod ${HELM_CHART_PATH} \\
-                    --namespace prod \\
-                    --create-namespace \\
-                    --set movie.image.repository=${MOVIE_IMAGE_BASE} \\
-                    --set cast.image.repository=${CAST_IMAGE_BASE} \\
-                    --set image.tag=${IMAGE_TAG} \\
-                    --set replicaCount=3
-                rm /tmp/kubeconfig_prod
-                """
+                withCredentials([file(credentialsId: 'config', variable: 'KUBECONFIG_FILE')]) {
+                    sh """
+                    echo "Deploying to PRODUCTION environment..."
+                    export KUBECONFIG=\${KUBECONFIG_FILE}
+                    helm upgrade --install fastapiapp-prod ${HELM_CHART_PATH} \\
+                        --namespace prod \\
+                        --create-namespace \\
+                        --set movie.image.repository=${MOVIE_IMAGE_BASE} \\
+                        --set cast.image.repository=${CAST_IMAGE_BASE} \\
+                        --set image.tag=${IMAGE_TAG} \\
+                        --set replicaCount=3
+                    """
+                }
             }
         }
-    }
 
     post {
         always {
