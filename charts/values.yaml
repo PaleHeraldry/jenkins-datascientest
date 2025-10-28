@@ -1,0 +1,74 @@
+# Default values for fastapiapp
+replicaCount: 1
+
+# Movie Service Configuration
+movie:
+  image:
+    repository: rpadallery/movie-service
+    pullPolicy: IfNotPresent
+    tag: "latest"
+  service:
+    type: ClusterIP
+    port: 80
+    targetPort: 8000
+  database:
+    uri: "postgresql://movie_db_username:movie_db_password@movie-db/movie_db_dev"
+
+# Cast Service Configuration
+cast:
+  image:
+    repository: rpadallery/cast-service
+    pullPolicy: IfNotPresent
+    tag: "latest"
+  service:
+    type: ClusterIP
+    port: 80
+    targetPort: 8000
+  database:
+    uri: "postgresql://cast_db_username:cast_db_password@cast-db/cast_db_dev"
+
+# Global image tag override
+image:
+  tag: "latest"
+
+# Service configuration (for backward compatibility)
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8000
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+podSecurityContext: {}
+securityContext: {}
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: chart-example.local
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
+  tls: []
+
+resources: {}
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 100
+  targetCPUUtilizationPercentage: 80
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
