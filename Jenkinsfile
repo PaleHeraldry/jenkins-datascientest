@@ -30,14 +30,14 @@ pipeline {
                 // Utiliser Docker Compose pour exécuter des tests d'intégration/unitaires
                 // Le service 'movie_service' et 'cast_service' doivent avoir une commande de test dans leurs Dockerfiles.
                 // OU, si vous utilisez un service de test séparé dans docker-compose :
-                sh 'docker-compose -f docker-compose.yml up --build -d' // Démarrer les services
+                sh 'docker compose -f docker-compose.yml up --build -d' // Démarrer les services
                 
                 // Exécuter les tests. Cette étape est critique et doit renvoyer 0 si les tests réussissent.
                 // NOTE: La commande de test exacte dépend de votre projet. C'est un exemple.
                 sh 'docker exec $(docker-compose ps -q movie_service) pytest /app/tests'
                 
                 // Arrêter et supprimer les conteneurs
-                sh 'docker-compose -f docker-compose.yml down'
+                sh 'docker compose -f docker-compose.yml down'
             }
         }
 
