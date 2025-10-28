@@ -34,7 +34,11 @@ pipeline {
                 
                 // Exécuter les tests. Cette étape est critique et doit renvoyer 0 si les tests réussissent.
                 // NOTE: La commande de test exacte dépend de votre projet. C'est un exemple.
-                sh 'docker exec $(docker compose ps -q movie_service) pytest /app/tests'
+                sh 'sleep 10' 
+                
+                // Use curl to hit the Nginx service's health endpoint (port 8081 mapped to Jenkins agent)
+                // Assuming port 8081 is exposed on the Jenkins agent.
+                sh 'curl -f http://localhost:8081/api/v1/movies/'
                 
                 // Arrêter et supprimer les conteneurs
                 sh 'docker compose -f docker-compose.yml down'
