@@ -66,8 +66,6 @@ pipeline {
             }
         }
 
-        ---
-
         stage('Deploy to QA') {
             when {
                 branch 'develop'
@@ -84,8 +82,6 @@ pipeline {
                 """
             }
         }
-
-        ---
 
         stage('Deploy to Staging') {
             when {
@@ -106,8 +102,6 @@ pipeline {
             }
         }
 
-        ---
-
         stage('Deploy to Production') {
             when {
                 // Assuming 'master' is the production branch (or 'main' based on your log)
@@ -127,8 +121,6 @@ pipeline {
             }
         }
     }
-
-    ---
 
     post {
         always {
