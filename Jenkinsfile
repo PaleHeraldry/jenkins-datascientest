@@ -22,8 +22,6 @@ pipeline {
         // Chemins d'image complets
         MOVIE_IMAGE_BASE = "${DOCKER_USER}/movie-service"
         CAST_IMAGE_BASE = "${DOCKER_USER}/cast-service"
-
-        BRANCH_NAME = sh(script: "git rev-parse --abbrev-ref HEAD", returnStdout: true).trim()
     }
 
     stages {
