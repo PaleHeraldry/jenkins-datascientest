@@ -1,116 +1,128 @@
 pipeline {
-environment { // Declaration of environment variables
-DOCKER_ID = "fallewi" // replace this with your docker-id
-DOCKER_IMAGE = "datascientestapi"
-DOCKER_TAG = "v.${BUILD_ID}.0" // we will tag our images with the current build in order to increment the value by 1 with each new build
-}
-agent any // Jenkins will be able to select all available agents
-stages {
-  stage(' Docker Build'){ // docker build image stage
-    steps {
-      script {
-      sh '''
-        docker rm -f jenkins
-        docker build -t $DOCKER_ID/$DOCKER_IMAGE:$DOCKER_TAG .
-      sleep 6
-      '''
+  agent any
+  stages {
+    stage('Build Docker Images') {
+      steps {
+        script {
+          docker.build("${MOVIE_IMAGE}:${IMAGE_TAG}", "./movie-service")
+          docker.build("${CAST_IMAGE}:${IMAGE_TAG}", "./cast-service")
+        }
+
       }
     }
-  }
-  stage('Docker run'){ // run container from our builded image
-    steps {
-      script {
-      sh '''
-      docker run -d -p 80:80 --name jenkins $DOCKER_ID/$DOCKER_IMAGE:$DOCKER_TAG
-      sleep 10
-      '''
+
+    stage('Push Docker Images') {
+      steps {
+        script {
+          docker.withRegistry("https://${DOCKER_REGISTRY}", "${DOCKER_CREDENTIALS_ID}") {
+            docker.image("${MOVIE_IMAGE}:${IMAGE_TAG}").push()
+            docker.image("${CAST_IMAGE}:${IMAGE_TAG}").push()
+            docker.image("${MOVIE_IMAGE}:${IMAGE_TAG}").push('latest')
+            docker.image("${CAST_IMAGE}:${IMAGE_TAG}").push('latest')
+          }
+        }
+
       }
     }
-  }
-  stage('Test Acceptance'){ // we launch the curl command to validate that the container responds to the request
-    steps {
-      script {
-      sh '''
-      curl localhost
-      '''
-      }
-    }
-  }
-  stage('Docker Push'){ //we pass the built image to our docker hub account
-    environment
-    {
-      DOCKER_PASS = credentials("DOCKER_HUB_PASS") // we retrieve  docker password from secret text called docker_hub_pass saved on jenkins
-    }
-    steps {
-      script {
-        sh '''
-        docker login -u $DOCKER_ID -p $DOCKER_PASS
-        docker push $DOCKER_ID/$DOCKER_IMAGE:$DOCKER_TAG
-        '''
-      }
-    }
-  }
-  stage('Deploiement en dev'){
-    environment {
-    KUBECONFIG = credentials("config") // we retrieve  kubeconfig from secret file called config saved on jenkins
-    }
-    steps {
-      script {
-      sh '''
-      rm -Rf .kube
-      mkdir .kube
-      ls
-      cat $KUBECONFIG > .kube/config
-      cp fastapi/values.yaml values.yml
-      cat values.yml
-      sed -i "s+tag.*+tag: ${DOCKER_TAG}+g" values.yml
-      helm upgrade --install app fastapi --values=values.yml --namespace dev
-      '''
-      }
-    }
-  }
-  stage('Deploiement en staging'){
-    environment {
-    KUBECONFIG = credentials("config") // we retrieve  kubeconfig from secret file called config saved on jenkins
-    }
-    steps {
-      script {
-      sh '''
-      rm -Rf .kube
-      mkdir .kube
-      ls
-      cat $KUBECONFIG > .kube/config
-      cp fastapi/values.yaml values.yml
-      cat values.yml
-      sed -i "s+tag.*+tag: ${DOCKER_TAG}+g" values.yml
-      helm upgrade --install app fastapi --values=values.yml --namespace staging
-      '''
-      }
-    }
-  }
-  stage('Deploiement en prod'){
-    environment {
-      KUBECONFIG = credentials("config") // we retrieve  kubeconfig from secret file called config saved on jenkins
+
+    stage('Deploy to Dev') {
+      when {
+        not {
+          branch 'master'
+        }
+
       }
       steps {
-        // Create an Approval Button with a timeout of 15minutes.
-        // this require a manuel validation in order to deploy on production environment
-        timeout(time: 15, unit: "MINUTES") {
-          input message: 'Do you want to deploy in production ?', ok: 'Yes'
-        }
         script {
-          sh '''
-          rm -Rf .kube
-          mkdir .kube
-          ls
-          cat $KUBECONFIG > .kube/config
-          cp fastapi/values.yaml values.yml
-          cat values.yml
-          sed -i "s+tag.*+tag: ${DOCKER_TAG}+g" values.yml
-          helm upgrade --install app fastapi --values=values.yml --namespace prod
-          '''
+          sh """
+          helm upgrade --install fastapiapp-dev ${HELM_CHART_PATH} \
+          --namespace dev \
+          --create-namespace \
+          --set image.tag=${IMAGE_TAG} \
+          --set replicaCount=1
+          """
         }
+
       }
     }
+
+    stage('Deploy to QA') {
+      when {
+        branch 'develop'
+      }
+      steps {
+        script {
+          sh """
+          helm upgrade --install fastapiapp-qa ${HELM_CHART_PATH} \
+          --namespace qa \
+          --create-namespace \
+          --set image.tag=${IMAGE_TAG} \
+          --set replicaCount=2
+          """
+        }
+
+      }
+    }
+
+    stage('Deploy to Staging') {
+      when {
+        branch 'develop'
+      }
+      steps {
+        script {
+          sh """
+          helm upgrade --install fastapiapp-staging ${HELM_CHART_PATH} \
+          --namespace staging \
+          --create-namespace \
+          --set image.tag=${IMAGE_TAG} \
+          --set replicaCount=2
+          """
+        }
+
+      }
+    }
+
+    stage('Deploy to Production') {
+      when {
+        branch 'master'
+      }
+      steps {
+        input(message: 'Deploy to Production?', ok: 'Deploy')
+        script {
+          sh """
+          helm upgrade --install fastapiapp-prod ${HELM_CHART_PATH} \
+          --namespace prod \
+          --create-namespace \
+          --set image.tag=${IMAGE_TAG} \
+          --set replicaCount=3
+          """
+        }
+
+      }
+    }
+
+  }
+  environment {
+    DOCKER_REGISTRY = 'docker.io'
+    DOCKER_CREDENTIALS_ID = 'rpadallery'
+    GIT_CREDENTIALS_ID = 'PaleHeraldry'
+    MOVIE_IMAGE = 'rpadallery/movie-service'
+    CAST_IMAGE = 'rpadallery/cast-service'
+    IMAGE_TAG = "${BUILD_NUMBER}"
+    HELM_CHART_PATH = './charts'
+  }
+  post {
+    always {
+      cleanWs()
+    }
+
+    success {
+      echo 'Pipeline completed successfully!'
+    }
+
+    failure {
+      echo 'Pipeline failed!'
+    }
+
   }
 }
