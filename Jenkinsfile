@@ -97,20 +97,19 @@ pipeline {
         // ------------------------------------------------------------------------------------------------------------------
 
         stage('Deploy to Dev') {
-            // Déploiement par défaut pour toutes les branches de fonctionnalité/pull requests
-            when {
-                // S'exécute si la branche n'est ni 'master' (ou main) ni 'develop'
-                not {
-                    anyOf {
-                        branch 'master'
-                        branch 'develop'
-                        branch 'main' // Ajout de 'main' par précaution moderne
-                    }
-                }
-            }
+            // ... when block ...
             steps {
                 sh """
                 echo "Deploying to DEV environment..."
+                
+                # 1. Write the Kubeconfig content to a temporary file
+                # /tmp/kubeconfig_dev is the path where the file will be created
+                echo "${config}" > /tmp/kubeconfig_dev
+                
+                # 2. Set the KUBECONFIG environment variable for the helm command
+                export KUBECONFIG=/tmp/kubeconfig_dev
+                
+                # 3. Execute helm command (Helm will now use the Kubeconfig file)
                 helm upgrade --install fastapiapp-dev ${HELM_CHART_PATH} \\
                 --namespace dev \\
                 --create-namespace \\
@@ -118,83 +117,110 @@ pipeline {
                 --set cast.image.repository=${CAST_IMAGE_BASE} \\
                 --set image.tag=${IMAGE_TAG} \\
                 --set replicaCount=1
-                """
-            }
-        }
-
-        // ------------------------------------------------------------------------------------------------------------------
-
-        stage('Deploy to QA') {
-            // S'exécute uniquement pour les commits sur la branche 'develop'
-            when {
-                branch 'develop'
-            }
-            steps {
-                sh """
-                echo "Deploying to QA environment..."
-                helm upgrade --install fastapiapp-qa ${HELM_CHART_PATH} \\
-                --namespace qa \\
-                --create-namespace \\
-                --set movie.image.repository=${MOVIE_IMAGE_BASE} \\
-                --set cast.image.repository=${CAST_IMAGE_BASE} \\
-                --set image.tag=${IMAGE_TAG} \\
-                --set replicaCount=2
-                """
-            }
-        }
-
-        // ------------------------------------------------------------------------------------------------------------------
-
-        stage('Deploy to Staging') {
-            // S'exécute immédiatement après QA, car sur la branche 'develop'
-            when {
-                branch 'develop'
-            }
-            steps {
-                // Une pause manuelle est recommandée avant le Staging/Prod pour inspection
-                input(message: 'QA successful. Proceed to STAGING?', ok: 'Deploy')
                 
-                sh """
-                echo "Deploying to STAGING environment..."
-                helm upgrade --install fastapiapp-staging ${HELM_CHART_PATH} \\
-                --namespace staging \\
-                --create-namespace \\
-                --set movie.image.repository=${MOVIE_IMAGE_BASE} \\
-                --set cast.image.repository=${CAST_IMAGE_BASE} \\
-                --set image.tag=${IMAGE_TAG} \\
-                --set replicaCount=2
+                # 4. Clean up the temporary file (Good practice)
+                rm /tmp/kubeconfig_dev
                 """
             }
         }
-
         // ------------------------------------------------------------------------------------------------------------------
 
-        stage('Deploy to Production') {
-            // S'exécute uniquement pour la branche 'master' (ou 'main')
-            when {
-                anyOf {
-                    branch 'master'
-                    branch 'main'
-                }
-            }
-            steps {
-                // Nécessite une approbation manuelle pour le déploiement en production
-                input(message: 'STAGING successful. Deploy to PRODUCTION?', ok: 'Deploy')
-                
-                sh """
-                echo "Deploying to PRODUCTION environment..."
-                helm upgrade --install fastapiapp-prod ${HELM_CHART_PATH} \\
-                --namespace prod \\
-                --create-namespace \\
-                --set movie.image.repository=${MOVIE_IMAGE_BASE} \\
-                --set cast.image.repository=${CAST_IMAGE_BASE} \\
-                --set image.tag=${IMAGE_TAG} \\
-                --set replicaCount=3
-                """
-            }
-        }
-    }
+        stage('Deploy to QA') {
+            // S'exécute uniquement pour les commits sur la branche 'develop'
+            when {
+                branch 'develop'
+            }
+            steps {
+                sh """
+                echo "Deploying to QA environment..."
+                
+                # --- GESTION DU KUBECONFIG ---
+                echo "${config}" > /tmp/kubeconfig_qa
+                export KUBECONFIG=/tmp/kubeconfig_qa
+                # -----------------------------
+                
+                helm upgrade --install fastapiapp-qa ${HELM_CHART_PATH} \\
+                --namespace qa \\
+                --create-namespace \\
+                --set movie.image.repository=${MOVIE_IMAGE_BASE} \\
+                --set cast.image.repository=${CAST_IMAGE_BASE} \\
+                --set image.tag=${IMAGE_TAG} \\
+                --set replicaCount=2
+                
+                # Nettoyage
+                rm /tmp/kubeconfig_qa
+                """
+            }
+        }
 
+        // ------------------------------------------------------------------------------------------------------------------
+
+        stage('Deploy to Staging') {
+            // S'exécute immédiatement après QA, car sur la branche 'develop'
+            when {
+                branch 'develop'
+            }
+            steps {
+                // Une pause manuelle est recommandée avant le Staging/Prod pour inspection
+                input(message: 'QA successful. Proceed to STAGING?', ok: 'Deploy')
+                
+                sh """
+                echo "Deploying to STAGING environment..."
+                
+                # --- GESTION DU KUBECONFIG ---
+                echo "${config}" > /tmp/kubeconfig_staging
+                export KUBECONFIG=/tmp/kubeconfig_staging
+                # -----------------------------
+                
+                helm upgrade --install fastapiapp-staging ${HELM_CHART_PATH} \\
+                --namespace staging \\
+                --create-namespace \\
+                --set movie.image.repository=${MOVIE_IMAGE_BASE} \\
+                --set cast.image.repository=${CAST_IMAGE_BASE} \\
+                --set image.tag=${IMAGE_TAG} \\
+                --set replicaCount=2
+                
+                # Nettoyage
+                rm /tmp/kubeconfig_staging
+                """
+            }
+        }
+
+        // ------------------------------------------------------------------------------------------------------------------
+
+        stage('Deploy to Production') {
+            // S'exécute uniquement pour la branche 'master' (ou 'main')
+            when {
+                anyOf {
+                    branch 'master'
+                    branch 'main'
+                }
+            }
+            steps {
+                // Nécessite une approbation manuelle pour le déploiement en production
+                input(message: 'STAGING successful. Deploy to PRODUCTION?', ok: 'Deploy')
+                
+                sh """
+                echo "Deploying to PRODUCTION environment..."
+                
+                # --- GESTION DU KUBECONFIG ---
+                echo "${config}" > /tmp/kubeconfig_prod
+                export KUBECONFIG=/tmp/kubeconfig_prod
+                # -----------------------------
+                
+                helm upgrade --install fastapiapp-prod ${HELM_CHART_PATH} \\
+                --namespace prod \\
+                --create-namespace \\
+                --set movie.image.repository=${MOVIE_IMAGE_BASE} \\
+                --set cast.image.repository=${CAST_IMAGE_BASE} \\
+                --set image.tag=${IMAGE_TAG} \\
+                --set replicaCount=3
+                
+                # Nettoyage
+                rm /tmp/kubeconfig_prod
+                """
+            }
+        }
     // ------------------------------------------------------------------------------------------------------------------
 
     post {
