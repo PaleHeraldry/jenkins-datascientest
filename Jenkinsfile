@@ -74,7 +74,7 @@ pipeline {
 
         stage('Deploy to Dev') {
             when {
-                branch 'dev'
+                expression { env.BRANCH_NAME == 'dev' }
             }
             steps {
                 sh """
@@ -95,7 +95,7 @@ pipeline {
 
         stage('Deploy to QA') {
             when {
-                branch 'qa'
+                expression { env.BRANCH_NAME == 'qa' }
             }
             steps {
                 sh """
@@ -116,7 +116,7 @@ pipeline {
 
         stage('Deploy to Staging') {
             when {
-                branch 'staging'
+                expression { env.BRANCH_NAME == 'staging' }
             }
             steps {
                 input(message: 'QA successful. Proceed to STAGING?', ok: 'Deploy')
@@ -138,7 +138,7 @@ pipeline {
 
         stage('Deploy to Production') {
             when {
-                branch 'main'
+                expression { env.BRANCH_NAME == 'main' }
             }
             steps {
                 input(message: 'STAGING successful. Deploy to PRODUCTION?', ok: 'Deploy')
