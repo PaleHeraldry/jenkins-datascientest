@@ -97,7 +97,9 @@ pipeline {
         // ------------------------------------------------------------------------------------------------------------------
 
         stage('Deploy to Dev') {
-            // ... when block ...
+            when {
+                branch 'dev'
+            }
             steps {
                 sh """
                 echo "Deploying to DEV environment..."
@@ -128,7 +130,7 @@ pipeline {
         stage('Deploy to QA') {
             // S'exécute uniquement pour les commits sur la branche 'develop'
             when {
-                branch 'develop'
+                branch 'dev'
             }
             steps {
                 sh """
@@ -158,7 +160,7 @@ pipeline {
         stage('Deploy to Staging') {
             // S'exécute immédiatement après QA, car sur la branche 'develop'
             when {
-                branch 'develop'
+                branch 'dev'
             }
             steps {
                 // Une pause manuelle est recommandée avant le Staging/Prod pour inspection
