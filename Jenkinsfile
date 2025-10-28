@@ -139,6 +139,7 @@ pipeline {
         stage('Deploy to Production') {
             when {
                 branch 'main'
+            }
             steps {
                 input(message: 'STAGING successful. Deploy to PRODUCTION?', ok: 'Deploy')
                 sh """
