@@ -138,8 +138,7 @@ pipeline {
 
         stage('Deploy to Production') {
             when {
-                expression { return env.BRANCH_NAME == 'main' || env.BRANCH_NAME == 'master' }
-            }
+                branch 'main'
             steps {
                 input(message: 'STAGING successful. Deploy to PRODUCTION?', ok: 'Deploy')
                 sh """
