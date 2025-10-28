@@ -34,7 +34,7 @@ pipeline {
                 
                 // Exécuter les tests. Cette étape est critique et doit renvoyer 0 si les tests réussissent.
                 // NOTE: La commande de test exacte dépend de votre projet. C'est un exemple.
-                sh 'docker exec $(docker-compose ps -q movie_service) pytest /app/tests'
+                sh 'docker exec $(docker compose ps -q movie_service) pytest /app/tests'
                 
                 // Arrêter et supprimer les conteneurs
                 sh 'docker compose -f docker-compose.yml down'
