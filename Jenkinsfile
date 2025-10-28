@@ -1,60 +1,102 @@
+// Jenkinsfile (Declarative Pipeline)
 pipeline {
+    // Exécuter le pipeline sur n'importe quel agent disponible
     agent any
+
+    // Définition des variables d'environnement
     environment {
-        // Helm will use these base paths
+        // Paramètres du Registre Docker
         DOCKER_REGISTRY = 'docker.io'
-        DOCKER_USER = 'rpadallery' // Using the user part of the registry path
-        DOCKER_CREDENTIALS_ID = 'rpadallery'
+        DOCKER_USER = 'rpadallery'              // Votre nom d'utilisateur Docker Hub
+        DOCKER_CREDENTIALS_ID = 'rpadallery'    // ID de vos credentials Docker Hub stockés dans Jenkins
+        
+        // Identifiants Git (pour SCM, si nécessaire)
         GIT_CREDENTIALS_ID = 'PaleHeraldry'
+        
+        // Tag d'image unique basé sur le numéro de build de Jenkins
         IMAGE_TAG = "${BUILD_NUMBER}"
+        
+        // Chemin vers vos charts Helm
         HELM_CHART_PATH = './charts'
 
-        // Full image paths for easy reference
+        // Chemins d'image complets
         MOVIE_IMAGE_BASE = "${DOCKER_USER}/movie-service"
         CAST_IMAGE_BASE = "${DOCKER_USER}/cast-service"
     }
 
     stages {
+        stage('Test Application (Docker Compose)') {
+            steps {
+                // Utiliser Docker Compose pour exécuter des tests d'intégration/unitaires
+                // Le service 'movie_service' et 'cast_service' doivent avoir une commande de test dans leurs Dockerfiles.
+                // OU, si vous utilisez un service de test séparé dans docker-compose :
+                sh 'docker-compose -f docker-compose.yml up --build -d' // Démarrer les services
+                
+                // Exécuter les tests. Cette étape est critique et doit renvoyer 0 si les tests réussissent.
+                // NOTE: La commande de test exacte dépend de votre projet. C'est un exemple.
+                sh 'docker exec $(docker-compose ps -q movie_service) pytest /app/tests'
+                
+                // Arrêter et supprimer les conteneurs
+                sh 'docker-compose -f docker-compose.yml down'
+            }
+        }
+
+        // ------------------------------------------------------------------------------------------------------------------
+
         stage('Build Docker Images') {
             steps {
                 script {
-                    // Build images with the unique BUILD_NUMBER tag
+                    // Les étapes de build doivent être dans un bloc script pour utiliser l'objet 'docker'
+                    echo "Building ${MOVIE_IMAGE_BASE}:${IMAGE_TAG}..."
                     docker.build("${MOVIE_IMAGE_BASE}:${IMAGE_TAG}", "./movie-service")
+                    
+                    echo "Building ${CAST_IMAGE_BASE}:${IMAGE_TAG}..."
                     docker.build("${CAST_IMAGE_BASE}:${IMAGE_TAG}", "./cast-service")
                 }
             }
         }
 
+        // ------------------------------------------------------------------------------------------------------------------
+
         stage('Tag and Push Docker Images') {
             steps {
                 script {
+                    // Se connecter au registre Docker Hub en utilisant les credentials
                     docker.withRegistry("https://${DOCKER_REGISTRY}", "${DOCKER_CREDENTIALS_ID}") {
-                        // 1. Push unique tags
+                        // Pousser les images avec le tag unique (pour l'historique)
                         docker.image("${MOVIE_IMAGE_BASE}:${IMAGE_TAG}").push()
                         docker.image("${CAST_IMAGE_BASE}:${IMAGE_TAG}").push()
 
-                        // 2. Tag and Push 'latest'
+                        // Retagguer l'image unique avec 'latest' et pousser (pour la commodité du déploiement)
                         docker.image("${MOVIE_IMAGE_BASE}:${IMAGE_TAG}").tag("${MOVIE_IMAGE_BASE}:latest")
                         docker.image("${CAST_IMAGE_BASE}:${IMAGE_TAG}").tag("${CAST_IMAGE_BASE}:latest")
+                        
                         docker.image("${MOVIE_IMAGE_BASE}:latest").push()
                         docker.image("${CAST_IMAGE_BASE}:latest").push()
+                        
+                        echo "Docker images pushed successfully with tags: ${IMAGE_TAG} and latest."
                     }
                 }
             }
         }
 
+        // ------------------------------------------------------------------------------------------------------------------
+
         stage('Deploy to Dev') {
+            // Déploiement par défaut pour toutes les branches de fonctionnalité/pull requests
             when {
-                // Deploys to Dev for any branch that is not 'master' or 'develop'
+                // S'exécute si la branche n'est ni 'master' (ou main) ni 'develop'
                 not {
                     anyOf {
                         branch 'master'
                         branch 'develop'
+                        branch 'main' // Ajout de 'main' par précaution moderne
                     }
                 }
             }
             steps {
                 sh """
+                echo "Deploying to DEV environment..."
                 helm upgrade --install fastapiapp-dev ${HELM_CHART_PATH} \\
                 --namespace dev \\
                 --create-namespace \\
@@ -66,12 +108,16 @@ pipeline {
             }
         }
 
+        // ------------------------------------------------------------------------------------------------------------------
+
         stage('Deploy to QA') {
+            // S'exécute uniquement pour les commits sur la branche 'develop'
             when {
                 branch 'develop'
             }
             steps {
                 sh """
+                echo "Deploying to QA environment..."
                 helm upgrade --install fastapiapp-qa ${HELM_CHART_PATH} \\
                 --namespace qa \\
                 --create-namespace \\
@@ -83,14 +129,19 @@ pipeline {
             }
         }
 
+        // ------------------------------------------------------------------------------------------------------------------
+
         stage('Deploy to Staging') {
+            // S'exécute immédiatement après QA, car sur la branche 'develop'
             when {
-                // This will execute immediately after QA if on the 'develop' branch
                 branch 'develop'
             }
             steps {
-                // Typically you'd add a manual approval input here, but keeping it for 'develop' branch flow
+                // Une pause manuelle est recommandée avant le Staging/Prod pour inspection
+                input(message: 'QA successful. Proceed to STAGING?', ok: 'Deploy')
+                
                 sh """
+                echo "Deploying to STAGING environment..."
                 helm upgrade --install fastapiapp-staging ${HELM_CHART_PATH} \\
                 --namespace staging \\
                 --create-namespace \\
@@ -102,14 +153,22 @@ pipeline {
             }
         }
 
+        // ------------------------------------------------------------------------------------------------------------------
+
         stage('Deploy to Production') {
+            // S'exécute uniquement pour la branche 'master' (ou 'main')
             when {
-                // Assuming 'master' is the production branch (or 'main' based on your log)
-                branch 'master'
+                anyOf {
+                    branch 'master'
+                    branch 'main'
+                }
             }
             steps {
-                input(message: 'Deploy to Production?', ok: 'Deploy')
+                // Nécessite une approbation manuelle pour le déploiement en production
+                input(message: 'STAGING successful. Deploy to PRODUCTION?', ok: 'Deploy')
+                
                 sh """
+                echo "Deploying to PRODUCTION environment..."
                 helm upgrade --install fastapiapp-prod ${HELM_CHART_PATH} \\
                 --namespace prod \\
                 --create-namespace \\
@@ -122,15 +181,18 @@ pipeline {
         }
     }
 
+    // ------------------------------------------------------------------------------------------------------------------
+
     post {
         always {
-            cleanWs() // Always clean workspace
+            // Toujours nettoyer l'espace de travail après le build, peu importe le résultat
+            cleanWs()
         }
         success {
-            echo 'Pipeline completed successfully!'
+            echo '✅ Pipeline completed successfully!'
         }
         failure {
-            echo 'Pipeline failed!'
+            echo '❌ Pipeline failed! Check the console output for errors.'
         }
     }
 }
