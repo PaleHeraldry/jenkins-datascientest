@@ -155,6 +155,7 @@ pipeline {
                 }
             }
         }
+    } // <-- This closing brace for 'stages' was missing!
 
     post {
         always {
