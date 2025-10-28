@@ -136,10 +136,7 @@ pipeline {
 
         stage('Deploy to Production') {
             when {
-                anyOf {
-                    branch 'master'
-                    branch 'main'
-                }
+                expression { return env.BRANCH_NAME == 'main' || env.BRANCH_NAME == 'master' }
             }
             steps {
                 input(message: 'STAGING successful. Deploy to PRODUCTION?', ok: 'Deploy')
